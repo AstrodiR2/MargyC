@@ -43,7 +43,11 @@ jobs:
       - name: Build
         run: python3 patcher.py Claude.xapk -o MargyC.apk
 
-      - uses: actions/upload-artifact@v4
-        with:
-          name: MargyC
-          path: MargyC.apk
+      - name: Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          TAG="build-${{ github.run_number }}"
+          gh release create "$TAG" MargyC.apk \
+            --title "MargyC build $TAG" \
+            --notes "Автосборка из ${{ github.sha }}"
