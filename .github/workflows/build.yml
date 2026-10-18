@@ -1,0 +1,49 @@
+name: Build MargyC
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'src/**'
+      - 'patcher.py'
+      - 'Claude.xapk'
+      - '.github/workflows/build.yml'
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Restore tools cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/claude-mods
+          key: claude-mods-tools-v1
+
+      - name: Keystore
+        env:
+          MARGYC_KEYSTORE_B64: ${{ secrets.MARGYC_KEYSTORE_B64 }}
+        run: |
+          mkdir -p keystore
+          echo "$MARGYC_KEYSTORE_B64" | base64 -d > keystore/narezany.jks
+
+      - name: Build
+        run: python3 patcher.py Claude.xapk -o MargyC.apk
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: MargyC
+          path: MargyC.apk
