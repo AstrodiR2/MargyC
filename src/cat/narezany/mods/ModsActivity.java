@@ -765,7 +765,8 @@ public final class ModsActivity extends Activity {
         baseField.setOnClickListener(v -> {
             final Ui.Sheet pick = ui.new Sheet(L.t("Кто отвечает на самом деле"));
             View addCustom = pick.item(L.t("Добавить кастомную модель"), null, false, null);
-            ((TextView) ((LinearLayout) addCustom).getChildAt(0)).setTextColor(ui.accent);
+            ((TextView) ((LinearLayout) ((LinearLayout) addCustom).getChildAt(0)).getChildAt(0))
+                    .setTextColor(ui.accent);
             addCustom.setOnClickListener(x -> {
                 pick.dialog.dismiss();
                 addCustomBase(id -> {
@@ -1950,3 +1951,4 @@ public final class ModsActivity extends Activity {
         return n == 0 ? L.t("Как в Claude") : L.t("Изменено цветов: ") + n;
     }
 }
+
