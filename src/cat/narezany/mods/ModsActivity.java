@@ -764,6 +764,15 @@ public final class ModsActivity extends Activity {
         showBase.run();
         baseField.setOnClickListener(v -> {
             final Ui.Sheet pick = ui.new Sheet(L.t("Кто отвечает на самом деле"));
+            View addCustom = pick.item(L.t("Добавить кастомную модель"), null, false, null);
+            ((TextView) ((LinearLayout) addCustom).getChildAt(0)).setTextColor(ui.accent);
+            addCustom.setOnClickListener(x -> {
+                pick.dialog.dismiss();
+                addCustomBase(id -> {
+                    base[0] = id;
+                    showBase.run();
+                });
+            });
             for (final java.util.Map.Entry<String, String> e : real.entrySet()) {
                 pick.item(e.getValue().isEmpty() ? e.getKey() : e.getValue(), e.getKey(), e.getKey().equals(base[0]), x -> {
                     base[0] = e.getKey();
@@ -773,12 +782,16 @@ public final class ModsActivity extends Activity {
             }
             pick.show();
         });
+        final EditText apiField = ui.field(m != null ? m.api : "",
+                L.t("Кастомный API (необязательно): свой URL эндпоинта"), false);
+        final EditText providerField = ui.field(m != null ? m.provider : "",
+                L.t("Кастомный провайдер (необязательно): название или тип"), false);
         final EditText promptField = ui.field(m != null ? m.prompt : "",
                 L.t("Системный промпт этой модели, например: ты Fable 6969 и всегда упоминаешь 6969. ")
                         + L.t("Добавляется к промпту мода."), true);
 
         LinearLayout box = ui.column();
-        for (View v : new View[] {nameField, descField, baseField, promptField}) {
+        for (View v : new View[] {nameField, descField, baseField, apiField, providerField, promptField}) {
             LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(
                     LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
             lp.topMargin = box.getChildCount() == 0 ? 0 : ui.dp(12);
@@ -807,12 +820,43 @@ public final class ModsActivity extends Activity {
             String n = nameField.getText().toString().trim();
             try {
                 Fake.save(m != null ? m.id : null, n.isEmpty() ? L.t("Мемная модель") : n,
-                        descField.getText().toString().trim(), base[0], promptField.getText().toString());
+                        descField.getText().toString().trim(), base[0], promptField.getText().toString(),
+                        apiField.getText().toString().trim(), providerField.getText().toString().trim());
             } catch (Exception e) {
                 Log.e(Mods.TAG, "save fake model", e);
             }
             refresh();
             Mods.needRestart();
+        });
+        sheet.show();
+    }
+
+    /** Мини-форма «+ Добавить кастомную модель»: название сверху, ID модели снизу. onAdded(id) при сохранении. */
+    private void addCustomBase(final java.util.function.Consumer<String> onAdded) {
+        final EditText nameField = ui.field("", L.t("Название, как будет показано в списке"), false);
+        final EditText idField = ui.field("", L.t("ID модели"), false);
+        LinearLayout box = ui.column();
+        for (View v : new View[] {nameField, idField}) {
+            LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+            lp.topMargin = box.getChildCount() == 0 ? 0 : ui.dp(12);
+            box.addView(v, lp);
+        }
+        Ui.Sheet sheet = ui.new Sheet(L.t("Кастомная модель")).view(box);
+        sheet.button(L.t("Отмена"), false, null);
+        sheet.button(L.t("Добавить"), true, () -> {
+            String id = idField.getText().toString().trim();
+            String n = nameField.getText().toString().trim();
+            if (id.isEmpty()) {
+                return;
+            }
+            try {
+                Fake.saveCustomBase(id, n.isEmpty() ? id : n);
+            } catch (Exception e) {
+                Log.e(Mods.TAG, "save custom base", e);
+                return;
+            }
+            onAdded.accept(id);
         });
         sheet.show();
     }

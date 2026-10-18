@@ -47,13 +47,34 @@ public final class Fake {
         final String description;
         final String base;
         final String prompt;
+        /** Свой URL эндпоинта для этой мемной модели, или "" — не задан (используется обычный). */
+        final String api;
+        /** Название/тип кастомного провайдера (просто для памяти пользователя), или "". */
+        final String provider;
 
         Model(String id, String name, String description, String base, String prompt) {
+            this(id, name, description, base, prompt, "", "");
+        }
+
+        Model(String id, String name, String description, String base, String prompt, String api, String provider) {
             this.id = id;
             this.name = name;
             this.description = description;
             this.base = base;
             this.prompt = prompt;
+            this.api = api == null ? "" : api;
+            this.provider = provider == null ? "" : provider;
+        }
+    }
+
+    /** Кастомная base-модель, которую пользователь добавил руками в «Кто отвечает на самом деле». */
+    static final class CustomBase {
+        final String id;
+        final String name;
+
+        CustomBase(String id, String name) {
+            this.id = id;
+            this.name = name;
         }
     }
 
@@ -368,7 +389,7 @@ public final class Fake {
         for (int i = 0; i < a.length(); i++) {
             JSONObject o = a.getJSONObject(i);
             list.add(new Model(o.getString("id"), o.getString("name"), o.optString("description"),
-                    o.getString("base"), o.optString("prompt")));
+                    o.getString("base"), o.optString("prompt"), o.optString("api"), o.optString("provider")));
         }
         cachedJson = json;
         cached = list;
@@ -389,13 +410,18 @@ public final class Fake {
 
     /** Новая (id == null) или изменённая модель. */
     static void save(String id, String name, String description, String base, String prompt) throws Exception {
+        save(id, name, description, base, prompt, "", "");
+    }
+
+    static void save(String id, String name, String description, String base, String prompt,
+            String api, String provider) throws Exception {
         JSONArray a = new JSONArray(Mods.prefs().getString("fake_models", "[]"));
         JSONArray out = new JSONArray();
         if (id == null) {
             id = PREFIX + UUID.randomUUID().toString().substring(0, 8);
         }
         JSONObject model = new JSONObject().put("id", id).put("name", name).put("description", description)
-                .put("base", base).put("prompt", prompt);
+                .put("base", base).put("prompt", prompt).put("api", api).put("provider", provider);
         boolean found = false;
         for (int i = 0; i < a.length(); i++) {
             if (a.getJSONObject(i).getString("id").equals(id)) {
@@ -428,8 +454,15 @@ public final class Fake {
 
     /** Модель текстом: заголовок, поля «ключ: значение», в конце промпт до конца текста. */
     static String export(Model m) {
-        return HEADER + "\nname: " + m.name + "\ndescription: " + m.description.replace('\n', ' ')
-                + "\nbase: " + m.base + "\nprompt:\n" + m.prompt.trim() + "\n";
+        StringBuilder sb = new StringBuilder(HEADER).append("\nname: ").append(m.name)
+                .append("\ndescription: ").append(m.description.replace('\n', ' ')).append("\nbase: ").append(m.base);
+        if (!m.api.isEmpty()) {
+            sb.append("\napi: ").append(m.api.replace('\n', ' '));
+        }
+        if (!m.provider.isEmpty()) {
+            sb.append("\nprovider: ").append(m.provider.replace('\n', ' '));
+        }
+        return sb.append("\nprompt:\n").append(m.prompt.trim()).append('\n').toString();
     }
 
     /**
@@ -441,7 +474,7 @@ public final class Fake {
         String[] parts = text.replace("\r", "").split("(?m)^\\s*" + HEADER + "\\s*$");
         Map<String, String> real = realModels();
         for (int i = 1; i < parts.length; i++) {
-            String name = "", description = "", base = "";
+            String name = "", description = "", base = "", api = "", provider = "";
             StringBuilder prompt = null;
             for (String line : parts[i].split("\n", -1)) {
                 if (prompt != null) {
@@ -454,6 +487,10 @@ public final class Fake {
                     description = line.substring(12).trim();
                 } else if (line.startsWith("base:")) {
                     base = line.substring(5).trim();
+                } else if (line.startsWith("api:")) {
+                    api = line.substring(4).trim();
+                } else if (line.startsWith("provider:")) {
+                    provider = line.substring(9).trim();
                 }
             }
             if (name.isEmpty()) {
@@ -465,13 +502,13 @@ public final class Fake {
             if (base.isEmpty()) {
                 continue;
             }
-            save(null, name, description, base, prompt != null ? prompt.toString().trim() : "");
+            save(null, name, description, base, prompt != null ? prompt.toString().trim() : "", api, provider);
             n++;
         }
         return n;
     }
 
-    /** Настоящие модели из меню (id -> название), их мод запоминает при загрузке меню. */
+    /** Настоящие модели из меню (id -> название), их мод запоминает при загрузке меню, плюс кастомные base. */
     static Map<String, String> realModels() {
         Map<String, String> map = new LinkedHashMap<String, String>();
         try {
@@ -482,7 +519,44 @@ public final class Fake {
             }
         } catch (Exception ignored) {
         }
+        for (CustomBase c : customBases()) {
+            map.put(c.id, c.name);
+        }
         return map;
+    }
+
+    // ---- кастомные base-модели («+ Добавить кастомную модель» в «Кто отвечает на самом деле») ----
+
+    static List<CustomBase> customBases() {
+        List<CustomBase> list = new ArrayList<CustomBase>();
+        try {
+            JSONArray a = new JSONArray(Mods.prefs().getString("fake_custom_bases", "[]"));
+            for (int i = 0; i < a.length(); i++) {
+                JSONObject o = a.getJSONObject(i);
+                list.add(new CustomBase(o.getString("id"), o.getString("name")));
+            }
+        } catch (Exception ignored) {
+        }
+        return list;
+    }
+
+    static void saveCustomBase(String id, String name) throws Exception {
+        JSONArray a = new JSONArray(Mods.prefs().getString("fake_custom_bases", "[]"));
+        JSONArray out = new JSONArray();
+        boolean found = false;
+        for (int i = 0; i < a.length(); i++) {
+            JSONObject o = a.getJSONObject(i);
+            if (o.getString("id").equals(id)) {
+                out.put(new JSONObject().put("id", id).put("name", name));
+                found = true;
+            } else {
+                out.put(o);
+            }
+        }
+        if (!found) {
+            out.put(new JSONObject().put("id", id).put("name", name));
+        }
+        Mods.prefs().edit().putString("fake_custom_bases", out.toString()).apply();
     }
 
     static String realName(String id) {

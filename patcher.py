@@ -75,6 +75,21 @@ def tools_dir():
     return d
 
 
+def aapt2_path():
+    """В Termux нативный aapt2 из apktool.jar (ELF под обычный Linux) не запускается —
+    нужен aapt2, собранный под сам Termux (pkg install aapt2). CLAUDE_MODS_AAPT2
+    переопределяет путь вручную; иначе берём $PREFIX/bin/aapt2 или то, что есть в PATH."""
+    env = os.environ.get("CLAUDE_MODS_AAPT2")
+    if env:
+        return env
+    prefix = os.environ.get("PREFIX")  # выставлен только внутри Termux
+    if prefix:
+        cand = pathlib.Path(prefix) / "bin" / "aapt2"
+        if cand.exists():
+            return str(cand)
+    return shutil.which("aapt2")
+
+
 def download(url, dest):
     log(f"  скачиваю {url.rsplit('/', 1)[-1]}")
     tmp = dest.with_suffix(dest.suffix + ".part")
@@ -1454,7 +1469,12 @@ def main():
 
         log("apktool b")
         unsigned = work / "unsigned.apk"
-        run(["java", "-jar", tools / "apktool.jar", "b", dec, "-o", unsigned])
+        aapt2 = aapt2_path()
+        b_cmd = ["java", "-jar", tools / "apktool.jar", "b", dec, "-o", unsigned]
+        if aapt2:
+            log(f"  aapt2: {aapt2}")
+            b_cmd += ["--aapt", aapt2]
+        run(b_cmd)
         log("код мода")
         log(f"  {add_dex(unsigned, build_dex(work, tools, names))}")
         log("подпись")
@@ -1469,3 +1489,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
